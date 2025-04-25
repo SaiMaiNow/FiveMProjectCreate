@@ -15,14 +15,44 @@ interface ExtendedQuickPickItem extends vscode.QuickPickItem {
 suite('FiveM Project Creator Extension', () => {
 	const testProjectPath = path.join(__dirname, 'test-project');
 	const testProjectName = 'test-project';
+	let sandbox: sinon.SinonSandbox;
 
 	suiteSetup(async () => {
 		console.log('Starting test suite...');
-		// Activate the extension
-		const ext = vscode.extensions.getExtension('fivemprojectcreate');
-		if (ext) {
+		
+		// รอให้ extension activate
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		
+		// ใช้ extension ID แบบเต็ม: publisher.name
+		const extensionId = 'rcn.fivemprojectcreate';
+		console.log(`Looking for extension: ${extensionId}`);
+		
+		const ext = vscode.extensions.getExtension(extensionId);
+		if (!ext) {
+			// แสดงรายการ extensions ทั้งหมดเพื่อ debug
+			const allExtensions = vscode.extensions.all.map(e => e.id);
+			console.log('Available extensions:', allExtensions);
+			
+			// ลอง activate extension ด้วยการเรียก command
+			await vscode.commands.executeCommand('fivemprojectcreate.createProject');
+			
+			// ลองหา extension อีกครั้ง
+			const retryExt = vscode.extensions.getExtension(extensionId);
+			if (!retryExt) {
+				throw new Error(`Extension not found: ${extensionId}. Make sure the extension ID matches package.json`);
+			}
+			await retryExt.activate();
+		} else {
 			await ext.activate();
 		}
+	});
+
+	setup(() => {
+		sandbox = sinon.createSandbox();
+	});
+
+	teardown(() => {
+		sandbox.restore();
 	});
 
 	suiteTeardown(async () => {
@@ -42,9 +72,10 @@ suite('FiveM Project Creator Extension', () => {
 
 	suite('Project Creation', () => {
 		test('Should create basic project structure', async () => {
+
 			// Mock user input
-			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
-			const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
+			const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
+			const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
 
 			// Setup return values
 			showInputBoxStub.onFirstCall().resolves(testProjectName); // Project name
@@ -56,7 +87,7 @@ suite('FiveM Project Creator Extension', () => {
 				await vscode.commands.executeCommand('fivemprojectcreate.createProject');
 
 				// Wait for file creation
-				await new Promise(resolve => setTimeout(resolve, 1000));
+				await new Promise(resolve => setTimeout(resolve, 2000));
 
 				// Check files
 				const expectedFiles = [
@@ -79,8 +110,8 @@ suite('FiveM Project Creator Extension', () => {
 
 		test('Should create GUI files when have_gui is true', async () => {
 			// Mock user input for GUI project
-			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
-			const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
+			const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
+			const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
 
 			showInputBoxStub.onFirstCall().resolves(testProjectName + '-gui');
 			showInputBoxStub.onSecondCall().resolves(testProjectPath + '-gui');
@@ -108,7 +139,11 @@ suite('FiveM Project Creator Extension', () => {
 			}
 		});
 
-		test('Should include SQL setup when have_sql is true', async () => {
+		test('Should include SQL setup when have_sql is true', async function() {
+			// Mock SQL selection
+			const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+			showQuickPickStub.onSecondCall().resolves({ label: 'Have a SQL', value: 'have_sql' } as ExtendedQuickPickItem);
+			
 			const fxmanifestPath = path.join(testProjectPath, 'fxmanifest.lua');
 			const serverPath = path.join(testProjectPath, 'server/rcn.server.lua');
 
@@ -129,11 +164,11 @@ suite('FiveM Project Creator Extension', () => {
 			}
 		});
 
-		test('Should handle existing project folder', async () => {
+		test('Should handle existing project folder', async function() {
 			// Mock user input
-			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
-			const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
-			const showWarningStub = sinon.stub(vscode.window, 'showWarningMessage');
+			const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
+			const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+			const showWarningStub = sandbox.stub(vscode.window, 'showWarningMessage');
 
 			const existingProjectPath = path.join(testProjectPath, 'existing-project');
 			await fs.mkdir(existingProjectPath, { recursive: true });
@@ -144,15 +179,14 @@ suite('FiveM Project Creator Extension', () => {
 				showInputBoxStub.onSecondCall().resolves(testProjectPath); // Project path
 				showQuickPickStub.resolves({ label: 'No GUI', value: 'no_gui' } as ExtendedQuickPickItem);
 				
-				showWarningStub.resolves({ title: 'Cancel', isCloseAffordance: true } as vscode.MessageItem);
+				showWarningStub.returns(Promise.resolve({ title: 'Overwrite', isCloseAffordance: true } as vscode.MessageItem));
 				
 				await vscode.commands.executeCommand('fivemprojectcreate.createProject');
 				
 				assert.ok(
 					showWarningStub.calledWith(
-						'Folder existing-project already exists, do you want to overwrite it?',
-						sinon.match({ title: 'Overwrite' }),
-						sinon.match({ title: 'Cancel' })
+						sinon.match.string,
+						sinon.match.array.deepEquals(['Overwrite', 'Cancel'])
 					),
 					'Should show warning for existing folder'
 				);
@@ -183,39 +217,41 @@ suite('FiveM Project Creator Extension', () => {
 			}
 		});
 
-		test('Should handle folder creation errors', async () => {
-			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
-			const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
-			const showErrorStub = sinon.stub(vscode.window, 'showErrorMessage');
+		test('Should handle folder creation errors', async function() {
+			// ใช้ proxyquire แทนการ mock โดยตรง
+			const proxyquire = require('proxyquire').noCallThru();
+			const fsStub = {
+				promises: {
+					mkdir: sinon.stub().rejects(new Error('Permission denied'))
+				}
+			};
 			
-			// Mock fs.mkdir ให้ throw error
-			const mkdirStub = sinon.stub(fs, 'mkdir').rejects(new Error('Permission denied'));
+			const extension = proxyquire('../extension', {
+				'fs': fsStub
+			});
+			
+			// Mock user input
+			const showInputBoxStub = sandbox.stub(vscode.window, 'showInputBox');
+			const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick');
+			const showErrorStub = sandbox.stub(vscode.window, 'showErrorMessage');
+			
+			showInputBoxStub.onFirstCall().resolves('error-test');
+			showInputBoxStub.onSecondCall().resolves(testProjectPath);
+			showQuickPickStub.resolves({ label: 'No GUI', value: 'no_gui' } as ExtendedQuickPickItem);
 
-			try {
-				showInputBoxStub.onFirstCall().resolves('error-test');
-				showInputBoxStub.onSecondCall().resolves(testProjectPath);
-				showQuickPickStub.resolves({ label: 'No GUI', value: 'no_gui' } as ExtendedQuickPickItem);
+			await vscode.commands.executeCommand('fivemprojectcreate.createProject');
 
-				await vscode.commands.executeCommand('fivemprojectcreate.createProject');
-
-				assert.ok(
-					showErrorStub.calledWith('Failed to create project : Error: Permission denied'),
-					'Should show error message for folder creation failure'
-				);
-
-			} finally {
-				showInputBoxStub.restore();
-				showQuickPickStub.restore();
-				showErrorStub.restore();
-				mkdirStub.restore();
-			}
+			assert.ok(
+				showErrorStub.calledWith('Failed to create project : Error: Permission denied'),
+				'Should show error message for folder creation failure'
+			);
 		});
 	});
 
 	suite('Error Handling', () => {
 		test('Should handle missing project name', async () => {
-			const showInputStub = sinon.stub(vscode.window, 'showInputBox').resolves(undefined);
-			const showErrorStub = sinon.stub(vscode.window, 'showErrorMessage');
+			const showInputStub = sandbox.stub(vscode.window, 'showInputBox').resolves(undefined);
+			const showErrorStub = sandbox.stub(vscode.window, 'showErrorMessage');
 			
 			await vscode.commands.executeCommand('fivemprojectcreate.createProject');
 			

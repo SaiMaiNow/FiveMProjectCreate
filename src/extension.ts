@@ -141,39 +141,39 @@ async function createProject(userSelected: UserSelected) {
 		await fs.mkdir(path.join(projectPath, 'server'), { recursive: true });
 		await fs.mkdir(path.join(projectPath, 'client'), { recursive: true });
 
-		let fxmanifestContent = `
-			fx_version 'cerulean'
-			game 'gta5'
-			author 'RCN'
-			description '${userSelected.project_name} made by RCN'
+		let fxmanifestContent = [
+            "fx_version 'cerulean'",
+            "game 'gta5'",
+            "author 'RCN'",
+            `description '${userSelected.project_name} made by RCN'`,
+            "",
+            "lua54 'yes'",
+            "",
+            "client_scripts {",
+            "    'client/rcn.client.lua',",
+            "}",
+            "",
+            "server_scripts {",
+            "    'server/rcn.server.lua',",
+            "}",
+            "",
+            "dependencies {",
+            "    'es_extended',",
+            "    'rcn_core',",
+            "}"
+        ].join('\n');
 
-			lua54 'yes'
+		let configContent = [
+            "Config = Config or {}"
+        ].join('\n');
 
-			client_scripts {
-				'client/rcn.client.lua',
-			}
+		let clientContent = [
+            "local ESX = exports['es_extended']:getSharedObject()"
+        ].join('\n');
 
-			server_scripts {
-				'server/rcn.server.lua',
-			}
-
-			dependencies {
-				'es_extended',
-				'rcn_core',
-			}
-		`;
-
-		let configContent = `
-			Config = Config or {}
-		`;
-
-		let clientContent = `
-			local ESX = exports["es_extended"]:getSharedObject()
-		`;
-
-		let serverContent = `
-			local ESX = exports["es_extended"]:getSharedObject()
-		`;
+		let serverContent = [
+            "local ESX = exports['es_extended']:getSharedObject()"
+        ].join('\n');
 
 		if (userSelected.have_gui) {
 			await fs.mkdir(path.join(projectPath, 'html'), { recursive: true });
@@ -189,39 +189,41 @@ async function createProject(userSelected: UserSelected) {
 			const jqueryContent = await response.text();
 			await fs.writeFile(path.join(projectPath, 'html/js/jquery.js'), jqueryContent);
 
-			clientContent += `
-				local isOpenGui = false
+			clientContent += [
+                "",
+                "local isOpenGui = false",
+                "",
+                "function ToggleGui(status)",
+                "    isOpenGui = status",
+                "    SetNuiFocus(status, status)",
+                "    SendNUIMessage({",
+                "        action = status and 'openGui' or 'closeGui'",
+                "    })",
+                "end"
+            ].join('\n');
 
-				function ToggleGui(status)
-					isOpenGui = status
-					SetNuiFocus(status, status)
-					SendNUIMessage({
-						action = status and "openGui" or "closeGui"
-					})
-				end
-			`;
-
-			fxmanifestContent += `
-				ui_page 'html/index.html'
-
-				files {
-					'html/index.html',
-					'html/css/app.css',
-					'html/js/app.js',
-				}
-			`;
+			fxmanifestContent += [
+                "",
+                "ui_page 'html/index.html'",
+                "",
+                "files {",
+                "    'html/**',",
+                "}"
+            ].join('\n');
 		}
 
 		if (userSelected.have_sql) {
-			serverContent += `
-				MySQL.ready(function()
-					print('MySQL is ready')
-				end)
-			`;
+			serverContent += [
+                "",
+                "MySQL.ready(function()",
+                "    print('MySQL is ready')",
+                "end)"
+            ].join('\n');
 
-			fxmanifestContent += `
-				server_script '@mysql-async/lib/MySQL.lua'
-			`;
+			fxmanifestContent += [
+                "",
+                "server_script '@mysql-async/lib/MySQL.lua'"
+            ].join('\n');
 		}
 
 		await fs.writeFile(path.join(projectPath, 'fxmanifest.lua'), fxmanifestContent);
