@@ -9,13 +9,15 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:fivemprojectcreate.createProject"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "fivemprojectcreate.helloWorld",
-        "title": "Hello World"
+        "command": "fivemprojectcreate.createProject",
+        "title": "Create FiveM Project"
       }
     ]
   },
