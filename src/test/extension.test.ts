@@ -16,7 +16,6 @@ suite('FiveM Project Creator Extension', () => {
 	const testProjectPath = path.join(__dirname, 'test-project');
 	const testProjectName = 'test-project';
 
-	// เตรียมข้อมูลก่อน test ทั้งหมด
 	suiteSetup(async () => {
 		console.log('Starting test suite...');
 		// Activate the extension
@@ -26,7 +25,6 @@ suite('FiveM Project Creator Extension', () => {
 		}
 	});
 
-	// cleanup หลัง test ทั้งหมด
 	suiteTeardown(async () => {
 		try {
 			await fs.rm(testProjectPath, { recursive: true, force: true });
@@ -128,6 +126,88 @@ suite('FiveM Project Creator Extension', () => {
 				);
 			} catch (error) {
 				assert.fail('Failed to verify SQL setup');
+			}
+		});
+
+		test('Should handle existing project folder', async () => {
+			// Mock user input
+			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
+			const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
+			const showWarningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+			const existingProjectPath = path.join(testProjectPath, 'existing-project');
+			await fs.mkdir(existingProjectPath, { recursive: true });
+
+			try {
+				// Setup return values
+				showInputBoxStub.onFirstCall().resolves('existing-project'); // Project name
+				showInputBoxStub.onSecondCall().resolves(testProjectPath); // Project path
+				showQuickPickStub.resolves({ label: 'No GUI', value: 'no_gui' } as ExtendedQuickPickItem);
+				
+				showWarningStub.resolves({ title: 'Cancel', isCloseAffordance: true } as vscode.MessageItem);
+				
+				await vscode.commands.executeCommand('fivemprojectcreate.createProject');
+				
+				assert.ok(
+					showWarningStub.calledWith(
+						'Folder existing-project already exists, do you want to overwrite it?',
+						sinon.match({ title: 'Overwrite' }),
+						sinon.match({ title: 'Cancel' })
+					),
+					'Should show warning for existing folder'
+				);
+
+				showWarningStub.resolves({ title: 'Overwrite', isCloseAffordance: true } as vscode.MessageItem);
+				
+				await vscode.commands.executeCommand('fivemprojectcreate.createProject');
+				
+				const expectedFiles = [
+					'fxmanifest.lua',
+					'config.lua',
+					'client/rcn.client.lua',
+					'server/rcn.server.lua'
+				];
+
+				for (const file of expectedFiles) {
+					const filePath = path.join(existingProjectPath, file);
+					const exists = await fs.access(filePath).then(() => true).catch(() => false);
+					assert.ok(exists, `${file} should be created after overwrite`);
+				}
+
+			} finally {
+				showInputBoxStub.restore();
+				showQuickPickStub.restore();
+				showWarningStub.restore();
+
+				await fs.rm(existingProjectPath, { recursive: true, force: true });
+			}
+		});
+
+		test('Should handle folder creation errors', async () => {
+			const showInputBoxStub = sinon.stub(vscode.window, 'showInputBox');
+			const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick');
+			const showErrorStub = sinon.stub(vscode.window, 'showErrorMessage');
+			
+			// Mock fs.mkdir ให้ throw error
+			const mkdirStub = sinon.stub(fs, 'mkdir').rejects(new Error('Permission denied'));
+
+			try {
+				showInputBoxStub.onFirstCall().resolves('error-test');
+				showInputBoxStub.onSecondCall().resolves(testProjectPath);
+				showQuickPickStub.resolves({ label: 'No GUI', value: 'no_gui' } as ExtendedQuickPickItem);
+
+				await vscode.commands.executeCommand('fivemprojectcreate.createProject');
+
+				assert.ok(
+					showErrorStub.calledWith('Failed to create project : Error: Permission denied'),
+					'Should show error message for folder creation failure'
+				);
+
+			} finally {
+				showInputBoxStub.restore();
+				showQuickPickStub.restore();
+				showErrorStub.restore();
+				mkdirStub.restore();
 			}
 		});
 	});

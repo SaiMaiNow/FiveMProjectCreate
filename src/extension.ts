@@ -7,7 +7,7 @@ import path from 'path';
 
 interface UserSelected {
 	have_gui: boolean;
-	have_sql: boolean; 
+	have_sql: boolean;
 	project_name: string;
 	project_path: string;
 }
@@ -21,7 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
 		project_name: '',
 		project_path: '',
 	};
-	
+
 	const command = vscode.commands.registerCommand('fivemprojectcreate.createProject', () => {
 		vscode.window.showInputBox({
 			title: 'Enter Project Name',
@@ -44,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
 						description: 'Create a FiveM project with a GUI'
 					},
 					{
-						label: 'No GUI', 
+						label: 'No GUI',
 						value: 'no_gui',
 						description: 'Create a FiveM project without not a GUI'
 					}
@@ -113,112 +113,126 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function createProject(userSelected: UserSelected) {
-	const projectPath: string = path.join(userSelected.project_path, userSelected.project_name);
 
-	await fs.mkdir(projectPath, { recursive: true });
+	try {
+		const projectPath: string = path.join(userSelected.project_path, userSelected.project_name);
 
-	const files: string[] = [
-		'fxmanifest.lua',
-		'server/rcn.server.lua',
-		'client/rcn.client.lua',
-		'config.lua',
-	]
-
-	const guifiles: string[] = [
-		'html/index.html',
-		'html/css/app.css',
-		'html/js/app.js',
-	]
-
-	for (const file of files) {
-		await fs.writeFile(path.join(projectPath, file), '');
-	}
-
-	let fxmanifestContent = `
-		fx_version 'cerulean'
-		game 'gta5'
-		author 'RCN'
-		description '${userSelected.project_name} made by RCN'
-
-		lua54 'yes'
-
-		client_scripts {
-			'client/rcn.client.lua',
+		try {
+	 		const stats = await fs.stat(projectPath);
+			if (stats.isDirectory()) {
+				const result = await vscode.window.showWarningMessage(
+                    `Folder ${userSelected.project_name} already exists, do you want to overwrite it?`,
+                    'Overwrite',
+                    'Cancel'
+                );
+                
+                if (result !== 'Overwrite') {
+                    vscode.window.showInformationMessage('Cancel create project');
+                    return;
+                }
+			}
+		} catch (error: any) {
+			if (error.code !== 'ENOENT') {
+                throw error;
+            }
 		}
 
-		server_scripts {
-			'server/rcn.server.lua',
-		}
+		await fs.mkdir(projectPath, { recursive: true });
+		await fs.mkdir(path.join(projectPath, 'server'), { recursive: true });
+		await fs.mkdir(path.join(projectPath, 'client'), { recursive: true });
 
-		dependencies {
-			'es_extended',
-			'rcn_core',
-		}
-	`;
+		let fxmanifestContent = `
+			fx_version 'cerulean'
+			game 'gta5'
+			author 'RCN'
+			description '${userSelected.project_name} made by RCN'
 
-	let configContent = `
-		Config = Config or {}
-	`;
+			lua54 'yes'
 
-	let clientContent = `
-		local ESX = exports["es_extended"]:getSharedObject()
-	`;
+			client_scripts {
+				'client/rcn.client.lua',
+			}
 
-	let serverContent = `
-		local ESX = exports["es_extended"]:getSharedObject()
-	`;
+			server_scripts {
+				'server/rcn.server.lua',
+			}
 
-	if (userSelected.have_gui) {
-		for (const file of guifiles) {
-			await fs.writeFile(path.join(projectPath, file), '');
-		}
-
-		const jqueryUrl = 'https://code.jquery.com/jquery-latest.min.js';
-		const response = await fetch(jqueryUrl);
-		const jqueryContent = await response.text();
-		await fs.writeFile(path.join(projectPath, 'html/js/jquery.js'), jqueryContent);
-
-		clientContent += `
-			local isOpenGui = false
-
-			function ToggleGui(status)
-				isOpenGui = status
-				SetNuiFocus(status, status)
-				SendNUIMessage({
-					action = status and "openGui" or "closeGui"
-				})
-			end
-		`;
-
-		fxmanifestContent += `
-			ui_page 'html/index.html'
-
-			files {
-				'html/index.html',
-				'html/css/app.css',
-				'html/js/app.js',
+			dependencies {
+				'es_extended',
+				'rcn_core',
 			}
 		`;
-	}
 
-	if (userSelected.have_sql) {
-		serverContent += `
-			MySQL.ready(function()
-				print('MySQL is ready')
-			end)
+		let configContent = `
+			Config = Config or {}
 		`;
 
-		fxmanifestContent += `
-			server_script '@mysql-async/lib/MySQL.lua'
+		let clientContent = `
+			local ESX = exports["es_extended"]:getSharedObject()
 		`;
+
+		let serverContent = `
+			local ESX = exports["es_extended"]:getSharedObject()
+		`;
+
+		if (userSelected.have_gui) {
+			await fs.mkdir(path.join(projectPath, 'html'), { recursive: true });
+			await fs.mkdir(path.join(projectPath, 'html/css'), { recursive: true });
+			await fs.mkdir(path.join(projectPath, 'html/js'), { recursive: true });
+
+			await fs.writeFile(path.join(projectPath, 'html/index.html'), '');
+			await fs.writeFile(path.join(projectPath, 'html/css/app.css'), '');
+			await fs.writeFile(path.join(projectPath, 'html/js/app.js'), '');
+
+			const jqueryUrl = 'https://code.jquery.com/jquery-latest.min.js';
+			const response = await fetch(jqueryUrl);
+			const jqueryContent = await response.text();
+			await fs.writeFile(path.join(projectPath, 'html/js/jquery.js'), jqueryContent);
+
+			clientContent += `
+				local isOpenGui = false
+
+				function ToggleGui(status)
+					isOpenGui = status
+					SetNuiFocus(status, status)
+					SendNUIMessage({
+						action = status and "openGui" or "closeGui"
+					})
+				end
+			`;
+
+			fxmanifestContent += `
+				ui_page 'html/index.html'
+
+				files {
+					'html/index.html',
+					'html/css/app.css',
+					'html/js/app.js',
+				}
+			`;
+		}
+
+		if (userSelected.have_sql) {
+			serverContent += `
+				MySQL.ready(function()
+					print('MySQL is ready')
+				end)
+			`;
+
+			fxmanifestContent += `
+				server_script '@mysql-async/lib/MySQL.lua'
+			`;
+		}
+
+		await fs.writeFile(path.join(projectPath, 'fxmanifest.lua'), fxmanifestContent);
+		await fs.writeFile(path.join(projectPath, 'config.lua'), configContent);
+		await fs.writeFile(path.join(projectPath, 'client/rcn.client.lua'), clientContent);
+		await fs.writeFile(path.join(projectPath, 'server/rcn.server.lua'), serverContent);
+
+		vscode.window.showInformationMessage('Project created successfully');
+	} catch (error) {
+		vscode.window.showErrorMessage('Failed to create project : ' + error);
 	}
-
-	await fs.writeFile(path.join(projectPath, 'fxmanifest.lua'), fxmanifestContent);
-	await fs.writeFile(path.join(projectPath, 'config.lua'), configContent);
-	await fs.writeFile(path.join(projectPath, 'client/rcn.client.lua'), clientContent);
-	await fs.writeFile(path.join(projectPath, 'server/rcn.server.lua'), serverContent);
-
-	vscode.window.showInformationMessage('Project created successfully');
 }
 
 // This method is called when your extension is deactivated
