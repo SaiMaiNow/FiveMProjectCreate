@@ -2,17 +2,26 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
+import fs from 'fs/promises';
+import path from 'path';
+
+interface UserSelected {
+	have_gui: boolean;
+	have_sql: boolean; 
+	project_name: string;
+	project_path: string;
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-
-	const userSelected = {
+	const userSelected: UserSelected = {
 		have_gui: false,
 		have_sql: false,
 		project_name: '',
 		project_path: '',
 	};
-
+	
 	const command = vscode.commands.registerCommand('fivemprojectcreate.createProject', () => {
 		vscode.window.showInputBox({
 			title: 'Enter Project Name',
@@ -103,8 +112,42 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(command);
 }
 
-function createProject(userSelected: any) {
-	
+async function createProject(userSelected: UserSelected) {
+	const projectPath: string = path.join(userSelected.project_path, userSelected.project_name);
+
+	await fs.mkdir(projectPath, { recursive: true });
+
+	const files: string[] = [
+		'fxmanifest.lua',
+		'server/rcn.server.lua',
+		'client/rcn.client.lua',
+		'config.lua',
+	]
+
+	const guifiles: string[] = [
+		'html/index.html',
+		'html/css/app.css',
+		'html/js/app.js',
+	]
+
+	for (const file of files) {
+		await fs.writeFile(path.join(projectPath, file), '');
+	}
+
+	if (userSelected.have_gui) {
+		for (const file of guifiles) {
+			await fs.writeFile(path.join(projectPath, file), '');
+		}
+
+		const jqueryUrl = 'https://code.jquery.com/jquery-latest.min.js';
+		const response = await fetch(jqueryUrl);
+		const jqueryContent = await response.text();
+		await fs.writeFile(path.join(projectPath, 'html/js/jquery.js'), jqueryContent);
+	}
+
+	if (userSelected.have_sql) {
+
+	}
 }
 
 // This method is called when your extension is deactivated
