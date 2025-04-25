@@ -6,7 +6,7 @@
   "publisher": "rcn",
   "extensionId": "rcn.fivemprojectcreate",
   "engines": {
-    "vscode": "^1.99.0"
+    "vscode": "^1.96.0"
   },
   "categories": [
     "Other"
@@ -42,7 +42,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/sinon": "^17.0.4",
-    "@types/vscode": "^1.99.0",
+    "@types/vscode": "^1.96.0",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "@vscode/test-cli": "^0.0.10",
