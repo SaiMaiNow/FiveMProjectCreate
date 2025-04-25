@@ -134,6 +134,40 @@ async function createProject(userSelected: UserSelected) {
 		await fs.writeFile(path.join(projectPath, file), '');
 	}
 
+	let fxmanifestContent = `
+		fx_version 'cerulean'
+		game 'gta5'
+		author 'RCN'
+		description '${userSelected.project_name} made by RCN'
+
+		lua54 'yes'
+
+		client_scripts {
+			'client/rcn.client.lua',
+		}
+
+		server_scripts {
+			'server/rcn.server.lua',
+		}
+
+		dependencies {
+			'es_extended',
+			'rcn_core',
+		}
+	`;
+
+	let configContent = `
+		Config = Config or {}
+	`;
+
+	let clientContent = `
+		local ESX = exports["es_extended"]:getSharedObject()
+	`;
+
+	let serverContent = `
+		local ESX = exports["es_extended"]:getSharedObject()
+	`;
+
 	if (userSelected.have_gui) {
 		for (const file of guifiles) {
 			await fs.writeFile(path.join(projectPath, file), '');
@@ -143,12 +177,51 @@ async function createProject(userSelected: UserSelected) {
 		const response = await fetch(jqueryUrl);
 		const jqueryContent = await response.text();
 		await fs.writeFile(path.join(projectPath, 'html/js/jquery.js'), jqueryContent);
+
+		clientContent += `
+			local isOpenGui = false
+
+			function ToggleGui(status)
+				isOpenGui = status
+				SetNuiFocus(status, status)
+				SendNUIMessage({
+					action = status and "openGui" or "closeGui"
+				})
+			end
+		`;
+
+		fxmanifestContent += `
+			ui_page 'html/index.html'
+
+			files {
+				'html/index.html',
+				'html/css/app.css',
+				'html/js/app.js',
+			}
+		`;
 	}
 
 	if (userSelected.have_sql) {
+		serverContent += `
+			MySQL.ready(function()
+				print('MySQL is ready')
+			end)
+		`;
 
+		fxmanifestContent += `
+			server_script '@mysql-async/lib/MySQL.lua'
+		`;
 	}
+
+	await fs.writeFile(path.join(projectPath, 'fxmanifest.lua'), fxmanifestContent);
+	await fs.writeFile(path.join(projectPath, 'config.lua'), configContent);
+	await fs.writeFile(path.join(projectPath, 'client/rcn.client.lua'), clientContent);
+	await fs.writeFile(path.join(projectPath, 'server/rcn.server.lua'), serverContent);
+
+	vscode.window.showInformationMessage('Project created successfully');
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+	console.log('Extension deactivated');
+}
